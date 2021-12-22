@@ -191,10 +191,6 @@ class XrayDataset(utils.Dataset):
             im = Image.open(path)
             width, height = im.size
 
-            if not os.path.exists(self.get_mask_path(dataset_dir, image_id, 0)):
-                print("Skipping ",image_id," Reason: No mask")
-                continue
-
             print("Adding image:", image_id)
 
             self.add_image(
