@@ -219,9 +219,9 @@ class XrayDataset(utils.Dataset):
             return img_info
 
         def xyxy_to_xywh(bbox_xyxy):
-            [xmin, ymin, xmax, ymax] = bbox_xyxy
-            w, h = xmax - xmin, ymax - ymin
-            return [xmin, ymin, w, h]
+            [x1, y1, x2, y2] = bbox_xyxy
+            w, h = x2 - x1 + 1, y2 - y1 + 1
+            return [x1, y1, w, h]
 
         image_info_all = []
         annotations_all = []
@@ -234,7 +234,8 @@ class XrayDataset(utils.Dataset):
             im = Image.open(path)
             width, height = im.size
             image_name = image_id.split("/")[-1]
-            img_info = create_img_info(img_id, image_name, path, width, height)
+            new_path = f"{dataset_dir}/{subset}/{image_name}"
+            img_info = create_img_info(img_id, image_name, new_path, width, height)
             image_info_all.append(img_info)
             img_id += 1
             box_list = boxes.get(image_id, [])
@@ -253,6 +254,7 @@ class XrayDataset(utils.Dataset):
             "annotations": annotations_all,
             "categories": categories_all,
         }
+        
         label_json_path = os.path.join(output_dir, f"annotations/{subset}.json")
         import json
 
