@@ -45,7 +45,8 @@ from preprocessing import prepare_welding
 import utils
 import model as modellib
 import numpy as np
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
 # Root directory of the project
 ROOT_DIR = os.getcwd()
@@ -66,17 +67,16 @@ DEFAULT_DATASET_YEAR = "2014"
 
 DATASETS = {
     "Castings": "http://dmery.sitios.ing.uc.cl/images/GDXray/Castings.zip",
-    "Welding": "http://dmery.sitios.ing.uc.cl/images/GDXray/Welds.zip"
+    "Welding": "http://dmery.sitios.ing.uc.cl/images/GDXray/Welds.zip",
 }
 
 
 # These layers change weights depending on the number of classes
 EXCLUDE_LAYER_WEIGHTS = [
-    'mrcnn_bbox_fc',      # [1024,324]  --> [1024,8]
-    'mrcnn_class_logits', # [1024,2]    --> [1024,81]
-    'mrcnn_mask',         # [1,1,256,2] --> [1,1,256,81]
+    "mrcnn_bbox_fc",  # [1024,324]  --> [1024,8]
+    "mrcnn_class_logits",  # [1024,2]    --> [1024,81]
+    "mrcnn_mask",  # [1,1,256,2] --> [1,1,256,81]
 ]
-
 
 
 ############################################################
@@ -89,6 +89,7 @@ class TrainConfig(Config):
     Derives from the base Config class and overrides values specific
     to the COCO dataset.
     """
+
     # Give the configuration a recognizable name
     NAME = "gdxray"
 
@@ -141,7 +142,6 @@ class InferenceConfig(TrainConfig):
 ############################################################
 #  Dataset
 ############################################################
-
 class XrayDataset(utils.Dataset):
     """
     Dataset of Xray Images
@@ -149,7 +149,10 @@ class XrayDataset(utils.Dataset):
     Images are referred to using their image_id (relative path to image).
     An example image_id is: "Castings/C0001/C0001_0004.png"
     """
-    def gdxray2cocoJSON(self, dataset_dir, subset, series, auto_download=False, output_dir=None):
+
+    def gdxray2cocoJSON(
+        self, dataset_dir, subset, series, auto_download=False, output_dir=None
+    ):
         """Load a subset of the GDXray dataset.
         dataset_dir: The root directory of the GDXray dataset.
         subset: What to load (train, test)
@@ -161,7 +164,7 @@ class XrayDataset(utils.Dataset):
 
         castings_metadata = "metadata/gdxray/castings_{0}.txt".format(subset)
 
-        if series=="Castings":
+        if series == "Castings":
             metadata = [castings_metadata]
         else:
             print("series should be Castings")
@@ -169,14 +172,16 @@ class XrayDataset(utils.Dataset):
 
         image_ids = []
         for metadata_path in metadata:
-            with open(metadata_path,"r") as metadata_file:
+            with open(metadata_path, "r") as metadata_file:
                 image_ids += metadata_file.readlines()
         # Strip all the newlines
         image_ids = [p.rstrip() for p in image_ids]
         boxes = self.load_boxes(dataset_dir, series)
 
         # Add classes
-        self.add_class(source="gdxray", class_id=CASTING_DEFECT, class_name="Casting Defect")
+        self.add_class(
+            source="gdxray", class_id=CASTING_DEFECT, class_name="Casting Defect"
+        )
 
         dataset_info = {
             "description": "castings",
@@ -192,11 +197,13 @@ class XrayDataset(utils.Dataset):
             {"supercategory": "N/A", "id": 1, "name": "Casting Defect"},
         ]
 
-        def create_annotation_info(annotation_id, image_id, category_id, bbox):
+        def create_annotation_info(annotation_id, image_id, category_id, bbox_xyxy):
+            bbox_xywh = xyxy_to_xywh(bbox_xyxy)
             annotation_info = {
                 "id": annotation_id,
                 "image_id": image_id,
-                "bbox": bbox,
+                "bbox": bbox_xywh,
+                "bbox_xyxy": bbox_xyxy,
                 "category_id": category_id,
             }
             return annotation_info
@@ -207,9 +214,14 @@ class XrayDataset(utils.Dataset):
                 "file_name": file_name,
                 "file_path": file_path,
                 "width": width,
-                "height": height
+                "height": height,
             }
             return img_info
+
+        def xyxy_to_xywh(bbox_xyxy):
+            [xmin, ymin, xmax, ymax] = bbox_xyxy
+            w, h = xmax - xmin, ymax - ymin
+            return [xmin, ymin, w, h]
 
         image_info_all = []
         annotations_all = []
@@ -218,18 +230,18 @@ class XrayDataset(utils.Dataset):
 
         # Add images
         for image_id in image_ids:
-            path = os.path.join(dataset_dir,image_id)
+            path = os.path.join(dataset_dir, image_id)
             im = Image.open(path)
             width, height = im.size
             image_name = image_id.split("/")[-1]
             img_info = create_img_info(img_id, image_name, path, width, height)
             image_info_all.append(img_info)
-            img_id +=1
+            img_id += 1
             box_list = boxes.get(image_id, [])
 
             for b in box_list:
                 anno_info = create_annotation_info(
-                    annotation_id, img_id, category_id=1, bbox=list(b)
+                    annotation_id, img_id, category_id=1, bbox_xyxy=list(b)
                 )
                 annotations_all.append(anno_info)
                 annotation_id += 1
@@ -243,11 +255,11 @@ class XrayDataset(utils.Dataset):
         }
         label_json_path = os.path.join(output_dir, f"annotations/{subset}.json")
         import json
+
         os.makedirs(os.path.join(output_dir, "annotations"), exist_ok=True)
         with open(label_json_path, "w") as json_file:
             json.dump(all_labels, json_file)
         return all_labels
-
 
     def load_gdxray(self, dataset_dir, subset, series, auto_download=False):
         """Load a subset of the GDXray dataset.
@@ -262,18 +274,18 @@ class XrayDataset(utils.Dataset):
         castings_metadata = "metadata/gdxray/castings_{0}.txt".format(subset)
         welds_metadata = "metadata/gdxray/welds_{0}.txt".format(subset)
 
-        if series=="Castings":
+        if series == "Castings":
             metadata = [castings_metadata]
 
-        if series=="Welds":
+        if series == "Welds":
             metadata = [welds_metadata]
 
-        if series=="All":
+        if series == "All":
             metadata = [castings_metadata, welds_metadata]
 
         image_ids = []
         for metadata_path in metadata:
-            with open(metadata_path,"r") as metadata_file:
+            with open(metadata_path, "r") as metadata_file:
                 image_ids += metadata_file.readlines()
         # Strip all the newlines
         image_ids = [p.rstrip() for p in image_ids]
@@ -281,12 +293,16 @@ class XrayDataset(utils.Dataset):
         boxes = self.load_boxes(dataset_dir, series)
 
         # Add classes
-        self.add_class(source="gdxray", class_id=CASTING_DEFECT, class_name="Casting Defect")
-        self.add_class(source="gdxray", class_id=WELDING_DEFECT, class_name="Welding Defect")
+        self.add_class(
+            source="gdxray", class_id=CASTING_DEFECT, class_name="Casting Defect"
+        )
+        self.add_class(
+            source="gdxray", class_id=WELDING_DEFECT, class_name="Welding Defect"
+        )
 
         # Add images
         for image_id in image_ids:
-            path = os.path.join(dataset_dir,image_id)
+            path = os.path.join(dataset_dir, image_id)
             im = Image.open(path)
             width, height = im.size
 
@@ -299,10 +315,9 @@ class XrayDataset(utils.Dataset):
                 width=width,
                 height=height,
                 dataset_dir=dataset_dir,
-                annotations=boxes.get(image_id,[])
+                annotations=boxes.get(image_id, []),
             )
             # self.create_mask(dataset_dir,image_id)
-
 
     def load_boxes(self, dataset_dir, series):
         """
@@ -318,18 +333,19 @@ class XrayDataset(utils.Dataset):
 
         for root, dirs, files in os.walk(series_dir):
             for folder in dirs:
-                metadata_file = os.path.join(root,folder,"ground_truth.txt")
+                metadata_file = os.path.join(root, folder, "ground_truth.txt")
                 if os.path.exists(metadata_file):
                     for row in np.loadtxt(metadata_file):
                         row_id = int(row[0])
-                        image_id = id_format.format(series=series,folder=folder,id=row_id)
-                        box = [row[3],row[1],row[4],row[2]] # (y1, x1, y2, x2)
-                        box_map.setdefault(image_id,[])
+                        image_id = id_format.format(
+                            series=series, folder=folder, id=row_id
+                        )
+                        box = [row[3], row[1], row[4], row[2]]  # (y1, x1, y2, x2)
+                        box_map.setdefault(image_id, [])
                         box_map[image_id].append(box)
                     # Mask R-CNN expects a numpy array of boxes
                     box_map[image_id] = np.array(box_map[image_id])
         return box_map
-
 
     def create_mask(self, dataset_dir, image_id):
         """Estimate instance masks for the given image.
@@ -339,31 +355,30 @@ class XrayDataset(utils.Dataset):
         in the form of a bitmap [height, width, instances].
         """
         info = self.get_image_info(image_id)
-        print("Creating mask for ",image_id,info)
+        print("Creating mask for ", image_id, info)
 
-        for i,box in enumerate(info["annotations"]):
+        for i, box in enumerate(info["annotations"]):
             # Convert to center and radius
             # Box dimensions: (y1, x1, y2, x2)
-            center_x = (box[1]+box[3])/2
-            center_y = (box[0]+box[2])/2
-            r_x = math.ceil(abs(box[3]-box[1])/2)
-            r_y = math.ceil(abs(box[2]-box[0])/2)
+            center_x = (box[1] + box[3]) / 2
+            center_y = (box[0] + box[2]) / 2
+            r_x = math.ceil(abs(box[3] - box[1]) / 2)
+            r_y = math.ceil(abs(box[2] - box[0]) / 2)
             # Make a bitmap mask
             mask = np.zeros((info["height"], info["width"]), dtype=np.uint8)
             rr, cc = draw.ellipse(center_y, center_x, r_y, r_x, shape=mask.shape)
             mask[rr, cc] = 1
             # Debugging
-            #import matplotlib.pyplot as plt
-            #image = scipy.ndimage.imread(info["path"])
-            #image[rr, cc] = mask[rr, cc]*0.4
-            #plt.imshow(image)
-            #plt.imshow(mask)
-            #plt.show()
+            # import matplotlib.pyplot as plt
+            # image = scipy.ndimage.imread(info["path"])
+            # image[rr, cc] = mask[rr, cc]*0.4
+            # plt.imshow(image)
+            # plt.imshow(mask)
+            # plt.show()
             # Save image
             path = self.get_mask_path(dataset_dir, image_id, i)
             im = Image.fromarray(mask)
             im.save(path)
-
 
     def load_mask(self, image_id):
         """Load instance masks for the given image.
@@ -389,16 +404,16 @@ class XrayDataset(utils.Dataset):
                 mask = mask.astype(np.bool)
                 masks.append(mask)
                 # Debugging
-                #import matplotlib.pyplot as plt
-                #image = scipy.ndimage.imread(info["path"])
-                #plt.figure()
-                #plt.imshow(image)
-                #plt.figure()
-                #plt.imshow(mask)
-                #plt.show()
+                # import matplotlib.pyplot as plt
+                # image = scipy.ndimage.imread(info["path"])
+                # plt.figure()
+                # plt.imshow(image)
+                # plt.figure()
+                # plt.imshow(mask)
+                # plt.show()
             else:
                 break
-        mask = np.stack(masks,axis=-1)
+        mask = np.stack(masks, axis=-1)
 
         # Get defect type
         CLASS = CASTING_DEFECT
@@ -408,18 +423,16 @@ class XrayDataset(utils.Dataset):
 
         return mask, class_ids
 
-
     def get_mask_path(self, dataset_dir, image_id, index):
         """Return the path to a mask"""
         image_file = os.path.join(dataset_dir, image_id)
         series_dir = os.path.dirname(image_file)
-        mask_dir = os.path.join(series_dir,"masks")
-        mask_name = os.path.basename(image_file).replace(".png","_%i.png"%index)
+        mask_dir = os.path.join(series_dir, "masks")
+        mask_name = os.path.basename(image_file).replace(".png", "_%i.png" % index)
         mask_path = os.path.join(mask_dir, mask_name)
         if not os.path.exists(mask_dir):
             os.makedirs(mask_dir)
         return mask_path
-
 
     def image_reference(self, image_id):
         """Return a link to the image in the COCO Website."""
@@ -429,15 +442,14 @@ class XrayDataset(utils.Dataset):
         else:
             super().image_reference(image_id)
 
-
     def auto_download(self, dataset_dir, series):
         """Download and extract the zip file from GDXray
 
         dataset_dir: The directory to place the dataset
         series: The series to download "Castings, Welds, Both"
         """
-        if series=="All":
-            all_series = ["Castings","Welding"]
+        if series == "All":
+            all_series = ["Castings", "Welding"]
         else:
             all_series = [series]
 
@@ -454,7 +466,9 @@ class XrayDataset(utils.Dataset):
             # Download images if not available locally
             if not os.path.exists(series_dir):
                 print("Downloading images to " + zip_file + " ...")
-                with urllib.request.urlopen(url) as response, open(zip_file, 'wb') as out:
+                with urllib.request.urlopen(url) as response, open(
+                    zip_file, "wb"
+                ) as out:
                     shutil.copyfileobj(response, out)
                 print("... done downloading.")
                 print("Unzipping " + zip_file + "...")
@@ -463,12 +477,12 @@ class XrayDataset(utils.Dataset):
                 print("... done unzipping")
 
                 # Clean up
-                print("Removing ",zip_file)
+                print("Removing ", zip_file)
                 os.remove(zip_file)
 
-                mac_dir = os.path.join(dataset_dir,"__MACOSX")
+                mac_dir = os.path.join(dataset_dir, "__MACOSX")
                 if os.path.exists(mac_dir):
-                    print("Removing ",mac_dir)
+                    print("Removing ", mac_dir)
                     shutil.rmtree(mac_dir)
 
         # Prepare the welding set
@@ -481,11 +495,9 @@ class XrayDataset(utils.Dataset):
         print("Finished downloading datasets")
 
 
-
 ############################################################
 #  GDXRay Evaluation
 ############################################################
-
 
 
 def evaluate_gdxray(model, dataset, eval_type="bbox", limit=0, image_ids=None):
@@ -503,22 +515,29 @@ def evaluate_gdxray(model, dataset, eval_type="bbox", limit=0, image_ids=None):
     APs = []
     for image_id in image_ids:
         # Load image
-        image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-            modellib.load_image_gt(dataset, config, image_id, use_mini_mask=False)
+        image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(
+            dataset, config, image_id, use_mini_mask=False
+        )
 
         # Run object detection
         results = model.detect([image], verbose=0)
 
         # Compute AP
         r = results[0]
-        AP, precisions, recalls, overlaps =\
-            utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
-                              r['rois'], r['class_ids'], r['scores'], r['masks'])
+        AP, precisions, recalls, overlaps = utils.compute_ap(
+            gt_bbox,
+            gt_class_id,
+            gt_mask,
+            r["rois"],
+            r["class_ids"],
+            r["scores"],
+            r["masks"],
+        )
         print("Image", image_id, "AP:", AP)
 
         num_processed += 1
         APs.append(AP)
-        if limit and num_processed>limit:
+        if limit and num_processed > limit:
             break
 
     return np.mean(APs)
@@ -529,36 +548,54 @@ def evaluate_gdxray(model, dataset, eval_type="bbox", limit=0, image_ids=None):
 ############################################################
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Train Mask R-CNN on MS COCO.')
-    parser.add_argument("command",
-                        metavar="<command>",
-                        help="'train' or 'evaluate' on MS COCO")
-    parser.add_argument('--dataset', required=True,
-                        metavar="/path/to/coco/",
-                        help='Directory of the MS-COCO dataset')
-    parser.add_argument('--series', required=True,
-                        metavar="<Casting | Welding | Both>",
-                        help='GDXray series to extract and evaluate on')
-    parser.add_argument('--model', required=True,
-                        metavar="/path/to/weights.h5",
-                        help="Path to weights .h5 file or 'coco'")
-    parser.add_argument('--logs', required=False,
-                        default=DEFAULT_LOGS_DIR,
-                        metavar="/path/to/logs/",
-                        help='Logs and checkpoints directory (default=logs/)')
-    parser.add_argument('--limit', required=False,
-                        default=500,
-                        metavar="<image count>",
-                        help='Images to use for evaluation (default=500)')
-    parser.add_argument('--download', required=False,
-                        default=False,
-                        metavar="<True|False>",
-                        help='Automatically download and unzip MS-COCO files (default=False)',
-                        type=bool)
+    parser = argparse.ArgumentParser(description="Train Mask R-CNN on MS COCO.")
+    parser.add_argument(
+        "command", metavar="<command>", help="'train' or 'evaluate' on MS COCO"
+    )
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        metavar="/path/to/coco/",
+        help="Directory of the MS-COCO dataset",
+    )
+    parser.add_argument(
+        "--series",
+        required=True,
+        metavar="<Casting | Welding | Both>",
+        help="GDXray series to extract and evaluate on",
+    )
+    parser.add_argument(
+        "--model",
+        required=True,
+        metavar="/path/to/weights.h5",
+        help="Path to weights .h5 file or 'coco'",
+    )
+    parser.add_argument(
+        "--logs",
+        required=False,
+        default=DEFAULT_LOGS_DIR,
+        metavar="/path/to/logs/",
+        help="Logs and checkpoints directory (default=logs/)",
+    )
+    parser.add_argument(
+        "--limit",
+        required=False,
+        default=500,
+        metavar="<image count>",
+        help="Images to use for evaluation (default=500)",
+    )
+    parser.add_argument(
+        "--download",
+        required=False,
+        default=False,
+        metavar="<True|False>",
+        help="Automatically download and unzip MS-COCO files (default=False)",
+        type=bool,
+    )
     args = parser.parse_args()
     print("Command: ", args.command)
     print("Model: ", args.model)
@@ -595,7 +632,6 @@ if __name__ == '__main__':
     else:
         model_path = args.model
 
-
     # Train or evaluate
     if args.command == "train":
         # Load weights
@@ -604,38 +640,51 @@ if __name__ == '__main__':
         # Training dataset. Use the training set and 35K from the
         # validation set, as as in the Mask RCNN paper.
         dataset_train = XrayDataset()
-        dataset_train.load_gdxray(args.dataset, "train", series=args.series, auto_download=args.download)
+        dataset_train.load_gdxray(
+            args.dataset, "train", series=args.series, auto_download=args.download
+        )
         dataset_train.prepare()
 
         # Validation dataset
         dataset_val = XrayDataset()
-        dataset_val.load_gdxray(args.dataset, "test", series=args.series, auto_download=args.download)
+        dataset_val.load_gdxray(
+            args.dataset, "test", series=args.series, auto_download=args.download
+        )
         dataset_val.prepare()
 
         # *** This training schedule is an example. Update to your needs ***
 
         # Training - Stage 1
         print("Training network heads")
-        model.train(dataset_train, dataset_val,
-                    learning_rate=config.LEARNING_RATE,
-                    epochs=40,
-                    layers='heads')
+        model.train(
+            dataset_train,
+            dataset_val,
+            learning_rate=config.LEARNING_RATE,
+            epochs=40,
+            layers="heads",
+        )
 
         # Training - Stage 2
         # Finetune layers from ResNet stage 4 and up
         print("Fine tune Resnet stage 4 and up")
-        model.train(dataset_train, dataset_val,
-                    learning_rate=config.LEARNING_RATE,
-                    epochs=120,
-                    layers='4+')
+        model.train(
+            dataset_train,
+            dataset_val,
+            learning_rate=config.LEARNING_RATE,
+            epochs=120,
+            layers="4+",
+        )
 
         # Training - Stage 3
         # Fine tune all layers
         print("Fine tune all layers")
-        model.train(dataset_train, dataset_val,
-                    learning_rate=config.LEARNING_RATE / 10,
-                    epochs=160,
-                    layers='all')
+        model.train(
+            dataset_train,
+            dataset_val,
+            learning_rate=config.LEARNING_RATE / 10,
+            epochs=160,
+            layers="all",
+        )
 
     elif args.command == "evaluate":
         # Load weights
@@ -643,11 +692,14 @@ if __name__ == '__main__':
         model.load_weights(model_path, by_name=True)
         # Validation dataset
         dataset_val = XrayDataset()
-        dataset_val.load_gdxray(args.dataset, "test", series=args.series, auto_download=args.download)
+        dataset_val.load_gdxray(
+            args.dataset, "test", series=args.series, auto_download=args.download
+        )
         dataset_val.prepare()
         print("Running GDXray evaluation on {} images.".format(args.limit))
         average_precision = evaluate_gdxray(model, dataset_val, limit=args.limit)
         print("Got AP={} using {} images.".format(average_precision, args.limit))
     else:
-        print("'{}' is not recognized. "
-              "Use 'train' or 'evaluate'".format(args.command))
+        print(
+            "'{}' is not recognized. " "Use 'train' or 'evaluate'".format(args.command)
+        )
