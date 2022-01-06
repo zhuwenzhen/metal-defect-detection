@@ -149,6 +149,105 @@ class XrayDataset(utils.Dataset):
     Images are referred to using their image_id (relative path to image).
     An example image_id is: "Castings/C0001/C0001_0004.png"
     """
+    def gdxray2cocoJSON(self, dataset_dir, subset, series, auto_download=False, output_dir=None):
+        """Load a subset of the GDXray dataset.
+        dataset_dir: The root directory of the GDXray dataset.
+        subset: What to load (train, test)
+        series: If provided, only loads images that have the given classes ("Casting","Welding")
+        auto_download: Automatically download and unzip GDXray images and annotations
+        """
+        if auto_download is True:
+            self.auto_download(dataset_dir, series)
+
+        castings_metadata = "metadata/gdxray/castings_{0}.txt".format(subset)
+
+        if series=="Castings":
+            metadata = [castings_metadata]
+        else:
+            print("series should be Castings")
+            return None
+
+        image_ids = []
+        for metadata_path in metadata:
+            with open(metadata_path,"r") as metadata_file:
+                image_ids += metadata_file.readlines()
+        # Strip all the newlines
+        image_ids = [p.rstrip() for p in image_ids]
+        boxes = self.load_boxes(dataset_dir, series)
+
+        # Add classes
+        self.add_class(source="gdxray", class_id=CASTING_DEFECT, class_name="Casting Defect")
+
+        dataset_info = {
+            "description": "castings",
+            "url": "",
+            "version": "1.0",
+            "year": 2021,
+            "contributor": "MLSL",
+            "annotation_creator": "idk",
+            "date_created": "2022/01/01",
+        }
+
+        categories_all = [
+            {"supercategory": "N/A", "id": 1, "name": "Casting Defect"},
+        ]
+
+        def create_annotation_info(annotation_id, image_id, category_id, bbox):
+            annotation_info = {
+                "id": annotation_id,
+                "image_id": image_id,
+                "bbox": bbox,
+                "category_id": category_id,
+            }
+            return annotation_info
+
+        def create_img_info(image_id, file_name, file_path, width, height):
+            img_info = {
+                "id": image_id,
+                "file_name": file_name,
+                "file_path": file_path,
+                "width": width,
+                "height": height
+            }
+            return img_info
+
+        image_info_all = []
+        annotations_all = []
+        img_id = 0
+        annotation_id = 0
+
+        # Add images
+        for image_id in image_ids:
+            path = os.path.join(dataset_dir,image_id)
+            im = Image.open(path)
+            width, height = im.size
+            image_name = image_id.split("/")[-1]
+            img_info = create_img_info(img_id, image_name, path, width, height)
+            image_info_all.append(img_info)
+            img_id +=1
+            box_list = boxes.get(image_id, [])
+
+            for b in box_list:
+                anno_info = create_annotation_info(
+                    annotation_id, img_id, category_id=1, bbox=list(b)
+                )
+                annotations_all.append(anno_info)
+                annotation_id += 1
+
+        all_labels = {
+            "info": dataset_info,
+            "licenses": {"url": "", "name": "MLSL_Ancestry"},
+            "images": image_info_all,
+            "annotations": annotations_all,
+            "categories": categories_all,
+        }
+        label_json_path = os.path.join(output_dir, f"annotations/{subset}.json")
+        import json
+        os.makedirs(os.path.join(output_dir, "annotations"), exist_ok=True)
+        with open(label_json_path, "w") as json_file:
+            json.dump(all_labels, json_file)
+        return all_labels
+
 
     def load_gdxray(self, dataset_dir, subset, series, auto_download=False):
         """Load a subset of the GDXray dataset.
